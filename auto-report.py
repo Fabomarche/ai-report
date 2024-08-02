@@ -19,7 +19,7 @@ llama = LlamaAPI(os.getenv("LLAMA_API_KEY")) #not necesary if use ollama
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-MONTH = "LLAMALOCAL4"
+MONTH = "JULIO24"
 
 def read_json_file(file_path):
     try:
@@ -48,8 +48,8 @@ def build_monthly_data(base_folder):
 
     return tawkData
 
-folder_07_path = "./chats/07" #edit with month folder
-tawkData = build_monthly_data(folder_07_path)
+folder_path = "./chats/07" #edit with month folder
+tawkData = build_monthly_data(folder_path)
 
 def llamaExternalChat(functionallity, prompt):
     api_request_json = {
