@@ -10,6 +10,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+import time
+import requests
 
 load_dotenv()
 
@@ -19,7 +21,7 @@ llama = LlamaAPI(os.getenv("LLAMA_API_KEY")) #not necesary if use ollama
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-MONTH = "JULIO24"
+MONTH = "AGOSTO24"
 
 def read_json_file(file_path):
     try:
@@ -48,7 +50,7 @@ def build_monthly_data(base_folder):
 
     return tawkData
 
-folder_path = "./chats/07" #edit with month folder
+folder_path = "./chats/08" #edit with month folder
 tawkData = build_monthly_data(folder_path)
 
 def llamaExternalChat(functionallity, prompt):
@@ -90,15 +92,47 @@ def get_most_likely_label(classification_result):
     return most_likely_label
 
 def clasificate_chats_by_type(conversation):
-    clasificatedChat = client.classification(conversation,
-    labels=["Reporte de un mal funcionamiento", "Necesidad de capacitacion", "Solicitud de informe o reporte"],
-    multi_class=True
+    while True:  # Bucle para reintentar en caso de error
+        try:
+            clasificatedChat = client.classification(conversation,
+            labels=["Reporte de un mal funcionamiento", "Necesidad de capacitacion", "Solicitud de informe o reporte"],
+            multi_class=True
+            )
+            time.sleep(6)  # Espera 6 segundos para no exceder el límite de 10 solicitudes por minuto
+            most_likely = get_most_likely_label(clasificatedChat) 
+            return most_likely
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 429:  # Verifica que e.response no sea None
+                print("Límite de solicitudes alcanzado. Esperando 60 segundos antes de reintentar...")
+                time.sleep(60)  # Espera 60 segundos antes de reintentar
+            else:
+                print(f"Error inesperado: {e}")  # Maneja otros errores
+                raise  # Si es otro tipo de error, lo lanza
+
+def clasificate_chats_by_type_ollama(conversation):
+    functionallity = (
+        "Clasifica el siguiente chat en uno de los siguientes tipos y devuelve solo el número correspondiente: "
+        "1: 'Reporte de un mal funcionamiento', "
+        "2: 'Necesidad de capacitación', "
+        "3: 'Solicitud de informe o reporte'. "
+        "Devuelve únicamente el número (1, 2 o 3)."
     )
 
-    most_likely = get_most_likely_label(clasificatedChat) 
-    return most_likely
+    response = llamaLocalChat(functionallity, conversation.strip())
+    
+    # Mapeo de números a tipos
+    tipos = {
+        "1": "Reporte de un mal funcionamiento",
+        "2": "Necesidad de capacitación",
+        "3": "Solicitud de informe o reporte"
+    }
 
-
+    # Verifica si la respuesta es un número válido
+    if response in tipos:
+        return tipos[response]  # Devuelve el string correspondiente
+    else:
+        print(f"Respuesta inesperada: {response}. Se devolverá 'Clasificación no válida'.")
+        return "Clasificación no válida"  # O maneja como prefieras
 
 def chat_title(chat):
     return llamaLocalChat(
@@ -135,7 +169,7 @@ def build_monthly_conversations(tawkData):
                 "chatDuration": chat_duration,
                 "createdOn": created_on, 
                 "conversation": conversation.strip(),
-                "type": clasificate_chats_by_type(conversation.strip()),
+                "type": clasificate_chats_by_type_ollama(conversation.strip()),
                 "summarization": chat_title(conversation.strip())
             }
             monthly_conversations.append(conversation_obj)
